@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MeteoStream Live - Telemetría Real Chile</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-main: #0B0F19;
+            --bg-card: #151D30;
+            --border-color: #222E4B;
+            --text-main: #F1F5F9;
+            --text-muted: #94A3B8;
+            --accent-cyan: #00F0FF;
+            --accent-green: #00E676;
+            --accent-purple: #D500F9;
+            --accent-orange: #FF9100;
+            --accent-blue: #2979FF;
+            --accent-snow: #ECEFF1;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            letter-spacing: -0.01em;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        .navbar-custom {
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .bd-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .bd-card:hover {
+            border-color: rgba(0, 240, 255, 0.4);
+            box-shadow: 0 4px 20px rgba(0, 240, 255, 0.05);
+        }
+
+        .nav-tabs {
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .nav-link {
+            color: var(--text-muted);
+            border: 1px solid transparent !important;
+            border-radius: 8px 8px 0 0 !important;
+            font-weight: 600;
+        }
+
+        .nav-link:hover {
+            color: var(--accent-cyan);
+            background-color: rgba(21, 29, 48, 0.5);
+        }
+
+        .nav-link.active {
+            color: var(--accent-cyan) !important;
+            background-color: var(--bg-card) !important;
+            border-color: var(--border-color) var(--border-color) var(--bg-card) !important;
+        }
+
+        .icon-box {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            font-size: 1.5rem;
+        }
+
+        .icon-cyan { background: rgba(0, 240, 255, 0.1); color: var(--accent-cyan); }
+        .icon-green { background: rgba(0, 198, 94, 0.1); color: var(--accent-green); }
+        .icon-purple { background: rgba(213, 0, 249, 0.1); color: var(--accent-purple); }
+        .icon-orange { background: rgba(255, 145, 0, 0.1); color: var(--accent-orange); }
+
+        .btn-cyan {
+            background-color: var(--accent-cyan);
+            color: #000;
+            font-weight: 600;
+            border-radius: 8px;
+        }
+        .btn-cyan:hover {
+            background-color: #00C8D7;
+            color: #000;
+        }
+
+        .pulse-indicator {
+            width: 10px;
+            height: 10px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+        }
+
+        /* DISEÑO DE CONTENEDOR DE MAPAS CON ZOOM Y PAN/ARRASTRE REALES */
+        .map-wrapper {
+            position: relative;
+            background: #0f1524;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            min-height: 620px;
+            overflow: hidden;
+        }
+
+        .chile-map-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            background-color: #0d1220;
+            overflow: hidden;
+            cursor: grab;
+        }
+        
+        .chile-map-container:active {
+            cursor: grabbing;
+        }
+
+        .map-zoom-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-origin: center center;
+            transition: transform 0.1s ease-out;
+            left: 0;
+            top: 0;
+        }
+
+        .chile-svg-bg {
+            position: absolute;
+            top: 2%;
+            left: 5%;
+            width: 90%;
+            height: 96%;
+            pointer-events: none;
+            opacity: 0.25;
+        }
+
+        .map-region {
+            position: absolute;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: transform 0.2s ease, background-color 0.2s;
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: bold;
+            color: #fff;
+            border: 2px solid #fff;
+            background-color: var(--accent-cyan);
+            z-index: 5;
+        }
+
+        .map-region:hover {
+            transform: translate(-50%, -50%) scale(1.35);
+            z-index: 10;
+            box-shadow: 0 0 20px var(--accent-cyan);
+            border-color: #000;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 100;
+        }
+
+        .zoom-btn {
+            width: 38px;
+            height: 38px;
+            background: rgba(21, 29, 48, 0.9);
+            border: 1px solid var(--border-color);
+            color: var(--accent-cyan);
+            border-radius: 6px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .zoom-btn:hover {
+            background: var(--accent-cyan);
+            color: #000;
+        }
+
+        .map-legend {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(21, 29, 48, 0.95);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            font-size: 0.8rem;
+            z-index: 100;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .map-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            color: var(--text-main);
+        }
+
+        .text-white-strong {
+            color: #FFFFFF !important;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .text-muted-light {
+            color: #CBD5E1 !important;
+        }
+        
+        .forecast-card {
+            background: rgba(21, 29, 48, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            min-width: 90px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-custom py-3 mb-4">
+        <div class="container-fluid px-4">
+            <span class="navbar-brand mb-0 h1 fw-bold text-white d-flex align-items-center">
+                <i class="bi bi-cloud-lightning-rain me-2 text-info"></i> METEOSTREAM <span class="text-info font-monospace ms-2 fs-6">v2.5.0_PRO_CLIMA</span>
+            </span>
+            <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center bg-dark rounded-3 px-3 py-1 border border-secondary border-opacity-25">
+                    <span class="pulse-indicator me-2"></span>
+                    <small class="text-muted-light mono">SINC (API ABIERTA): 3265.1 segs</small>
+                </div>
+                <a href="index.php?download=1" class="btn btn-cyan btn-sm">
+                    <i class="bi bi-cloud-arrow-down-fill me-1"></i> Telemetría Raw (.TXT)
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        
+        <!-- Pestañas de Navegación -->
+        <ul class="nav nav-tabs mb-4" id="climaTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tiempo-real-tab" data-bs-toggle="tab" data-bs-target="#tiempo-real" type="button" role="tab" aria-controls="tiempo-real" aria-selected="true">
+                    <i class="bi bi-activity me-1 text-danger"></i> Telemetría Tiempo Real
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pronostico-tab" data-bs-toggle="tab" data-bs-target="#pronostico" type="button" role="tab" aria-controls="pronostico" aria-selected="false">
+                    <i class="bi bi-map-fill me-1 text-cyan"></i> Mapa Satelital de Chile
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a class="nav-link" id="sismos-tab" href="api_rest.php">
+                 <i class="bi bi-activity me-1 text-danger"></i> API REST
+                     </a>
+             </li>
+         
+    <li class="nav-item" role="presentation">
+        <a class="nav-link" id="sismos-tab" href="obtener_sismos.php">
+            <i class="bi bi-activity me-1 text-danger"></i> Consultar Sismos (obtener_sismos.php)
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link" id="avisos-tab" href="avisos.php">
+            <i class="bi bi-bell-fill me-1 text-warning"></i> Registro de Avisos (avisos.php)
+        </a>
+    </li>
+        </ul>
+
+        <div class="tab-content" id="climaTabContent">
+            
+            <!-- PESTAÑA 1: TELEMETRÍA EN TIEMPO REAL -->
+            <div class="tab-pane fade show active" id="tiempo-real" role="tabpanel" aria-labelledby="tiempo-real-tab">
+                
+                <!-- Sección de Alertas Informativas de Integración -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="bd-card">
+                            <h6 class="fw-bold text-uppercase mb-3 text-white-strong"><i class="bi bi-wifi-2 text-info me-2"></i>Estado de la Integración (APIs Públicas)</h6>
+                            <div class="row g-3">
+                                                                <div class="col-lg-6">
+                                    <div class="alert alert-danger bg-dark bg-opacity-40 border border-danger text-white p-3 h-100 m-0">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="badge bg-danger text-uppercase">API Open-Meteo</span>
+                                            <small class="text-white-strong mono">Chile Continental</small>
+                                        </div>
+                                        <h6 class="fw-bold mb-1 text-danger">Información de Estaciones Activa</h6>
+                                        <p class="small text-muted-light mb-0">Datos consolidados e integrados dinámicamente de Norte a Sur.</p>
+                                    </div>
+                                </div>
+                                                                <div class="col-lg-6">
+                                    <div class="alert alert-info bg-dark bg-opacity-40 border border-info text-white p-3 h-100 m-0">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="badge bg-info text-uppercase">Copernicus</span>
+                                            <small class="text-white-strong mono">Red Nacional</small>
+                                        </div>
+                                        <h6 class="fw-bold mb-1 text-info">Monitoreo Ambiental Activo</h6>
+                                        <p class="small text-muted-light mb-0">Parámetros de material particulado PM2.5 obtenidos en tiempo real de modelos de análisis global.</p>
+                                    </div>
+                                </div>
+                                                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="bd-card" style="border-left: 4px solid var(--accent-cyan);">
+                            <h5 class="fw-bold text-white-strong mb-2">
+                                <i class="bi bi-cpu text-cyan me-2" style="color: var(--accent-cyan);"></i>Matriz de Monitoreo Dinámico (Datos de Redes Globales)
+                            </h5>
+                            <p class="text-muted-light small m-0">
+                                Las mediciones provienen de los modelos meteorológicos combinados de **Open-Meteo**, almacenándose en <code class="mono text-info">stream_clima_chile.txt</code>. Actualizado en vivo: <span class="text-white fw-bold bg-danger px-2 py-1 rounded small">17-11-2026 04:20:51</span>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Estaciones en cuadrícula -->
+                <div class="row g-3 mb-4">
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-purple);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Norte</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Arica</h5>
+                                </div>
+                                <div class="icon-box icon-purple">
+                                    <i class="bi bi-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">22.6°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">78%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Principalmente Despejado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">27.4°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">15°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">2.4 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-purple);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Norte</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Antofagasta</h5>
+                                </div>
+                                <div class="icon-box icon-purple">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">19.5°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">90%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Parcialmente Nublado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">26.5°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">14.2°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">4.9 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-purple);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Norte</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Copiapó</h5>
+                                </div>
+                                <div class="icon-box icon-purple">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">15.9°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">82%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Parcialmente Nublado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">34.1°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">9.8°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">27.8 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-cyan);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Centro</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Concón</h5>
+                                </div>
+                                <div class="icon-box icon-cyan">
+                                    <i class="bi bi-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">14.6°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">96%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Principalmente Despejado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">27.3°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">1.5°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">164.1 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-cyan);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Centro</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Viña del Mar</h5>
+                                </div>
+                                <div class="icon-box icon-cyan">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">14.6°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">99%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Niebla</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">32.8°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">5.1°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">248.1 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-cyan);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Centro</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Valparaíso</h5>
+                                </div>
+                                <div class="icon-box icon-cyan">
+                                    <i class="bi bi-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">15.6°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">90%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Principalmente Despejado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">25.4°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">7.4°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">212.8 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-cyan);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Centro</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Santiago</h5>
+                                </div>
+                                <div class="icon-box icon-cyan">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">14.7°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">81%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Nublado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">31.2°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">7°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">247.4 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-cyan);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Centro</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Puente Alto</h5>
+                                </div>
+                                <div class="icon-box icon-cyan">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">13.2°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">95%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Nublado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">31.7°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">5.2°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">254 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-cyan);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Centro</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">San José de Maipo</h5>
+                                </div>
+                                <div class="icon-box icon-cyan">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">11.9°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">98%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Nublado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">26.9°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">1.8°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">367.4 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-cyan);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Centro</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Litueche</h5>
+                                </div>
+                                <div class="icon-box icon-cyan">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">12.6°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">100%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Niebla</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">29.9°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">1.7°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">265.7 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-cyan);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Centro</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Concepción</h5>
+                                </div>
+                                <div class="icon-box icon-cyan">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">15.1°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">91%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Nublado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">25.6°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">4.7°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">191.6 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-green);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Sur</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Temuco</h5>
+                                </div>
+                                <div class="icon-box icon-green">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">13.5°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">97%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Llovizna Ligera</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">30.2°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">1.6°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">141.2 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-green);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Sur</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Puerto Montt</h5>
+                                </div>
+                                <div class="icon-box icon-green">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">14.1°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">96%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Nublado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">23°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">0.8°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">230.2 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-green);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Sur</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Coyhaique</h5>
+                                </div>
+                                <div class="icon-box icon-green">
+                                    <i class="bi bi-cloud-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">12.7°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">87%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Nublado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">24.6°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">-11.3°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">102.5 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                        <div class="col-md-4 col-lg-3">
+                        <div class="bd-card h-100" style="border-top: 4px solid var(--accent-green);">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="text-uppercase tracking-wider text-muted-light fs-7 small fw-semibold">Estación Sur</span>
+                                    <h5 class="fw-bold mt-1 mb-0 text-white-strong">Punta Arenas</h5>
+                                </div>
+                                <div class="icon-box icon-green">
+                                    <i class="bi bi-sun-fill"></i>
+                                </div>
+                            </div>
+                            <div class="row g-2 my-2">
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Temp actual</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">7.9°C</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Humedad</small>
+                                    <span class="mono fw-bold fs-4 text-white-strong">87%</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">MP 2.5 (Aire)</small>
+                                    <span class="mono fw-bold fs-6 text-success">12 µg/m³</span>
+                                </div>
+                                <div class="col-6 bg-dark bg-opacity-20 p-2 rounded border border-secondary border-opacity-10">
+                                    <small class="text-muted-light d-block text-uppercase" style="font-size:0.75rem">Condición</small>
+                                    <span class="fw-semibold text-wrap text-info" style="font-size:0.85rem">Despejado</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-3 text-muted-light mono" style="font-size: 0.8rem;">
+                                <span>Máx: <strong class="text-white-strong">20.6°C</strong></span>
+                                <span>Mín: <strong class="text-white-strong">-3.2°C</strong></span>
+                                <span>Lluvia: <strong class="text-white-strong">53.8 mm</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                                    </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-7">
+                        <div class="bd-card h-100">
+                            <h6 class="mb-3 fw-bold text-uppercase text-white-strong"><i class="bi bi-bar-chart-line me-2 text-info"></i>Curva Comparativa Térmica Reciente (°C)</h6>
+                            <div style="position: relative; height:320px;">
+                                <canvas id="chartTemperatura"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="bd-card h-100">
+                            <h6 class="mb-3 fw-bold text-uppercase text-white-strong"><i class="bi bi-pie-chart me-2 text-warning"></i>Distribución de Condiciones Atmosféricas</h6>
+                            <div style="position: relative; height:280px;">
+                                <canvas id="chartCondiciones"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PESTAÑA 2: MAPAS CON CONTROL DE ZOOM, DRAG/PAN Y DETALLES -->
+            <div class="tab-pane fade" id="pronostico" role="tabpanel" aria-labelledby="pronostico-tab">
+                <div class="row">
+                    <!-- Columna Mapa -->
+                    <div class="col-lg-7 mb-4">
+                        <div class="map-wrapper">
+                            <div class="zoom-controls">
+                                <div class="zoom-btn" onclick="ajustarZoom(0.2)" title="Zoom In"><i class="bi bi-plus-lg"></i></div>
+                                <div class="zoom-btn" onclick="ajustarZoom(-0.2)" title="Zoom Out"><i class="bi bi-dash-lg"></i></div>
+                                <div class="zoom-btn" onclick="reiniciarMapa()" title="Reset"><i class="bi bi-arrow-counterclockwise"></i></div>
+                            </div>
+                            
+                            <div class="chile-map-container" id="mapaContenedor">
+                                <div class="map-zoom-container" id="mapaZoom">
+                                    <svg class="chile-svg-bg" viewBox="0 0 100 800" preserveAspectRatio="none">
+                                        <path d="M 50 10 Q 45 150 48 300 Q 40 450 42 600 Q 45 700 43 780" stroke="#00F0FF" stroke-width="3" fill="none" />
+                                    </svg>
+                                    
+                                                                        <div class="map-region" 
+                                         style="left: 48%; top: 8%;"
+                                         onclick="seleccionarCiudad('Arica')"
+                                         title="Arica: 22.6°C">
+                                        A                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 47%; top: 18%;"
+                                         onclick="seleccionarCiudad('Antofagasta')"
+                                         title="Antofagasta: 19.5°C">
+                                        A                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 46%; top: 28%;"
+                                         onclick="seleccionarCiudad('Copiapó')"
+                                         title="Copiapó: 15.9°C">
+                                        C                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 43%; top: 41%;"
+                                         onclick="seleccionarCiudad('Concón')"
+                                         title="Concón: 14.6°C">
+                                        C                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 42%; top: 43%;"
+                                         onclick="seleccionarCiudad('Viña del Mar')"
+                                         title="Viña del Mar: 14.6°C">
+                                        V                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 41%; top: 45%;"
+                                         onclick="seleccionarCiudad('Valparaíso')"
+                                         title="Valparaíso: 15.6°C">
+                                        V                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 50%; top: 48%;"
+                                         onclick="seleccionarCiudad('Santiago')"
+                                         title="Santiago: 14.7°C">
+                                        S                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 51%; top: 51%;"
+                                         onclick="seleccionarCiudad('Puente Alto')"
+                                         title="Puente Alto: 13.2°C">
+                                        P                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 56%; top: 53%;"
+                                         onclick="seleccionarCiudad('San José de Maipo')"
+                                         title="San José de Maipo: 11.9°C">
+                                        S                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 42%; top: 55%;"
+                                         onclick="seleccionarCiudad('Litueche')"
+                                         title="Litueche: 12.6°C">
+                                        L                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 40%; top: 64%;"
+                                         onclick="seleccionarCiudad('Concepción')"
+                                         title="Concepción: 15.1°C">
+                                        C                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 42%; top: 72%;"
+                                         onclick="seleccionarCiudad('Temuco')"
+                                         title="Temuco: 13.5°C">
+                                        T                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 41%; top: 80%;"
+                                         onclick="seleccionarCiudad('Puerto Montt')"
+                                         title="Puerto Montt: 14.1°C">
+                                        P                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 45%; top: 87%;"
+                                         onclick="seleccionarCiudad('Coyhaique')"
+                                         title="Coyhaique: 12.7°C">
+                                        C                                    </div>
+                                                                        <div class="map-region" 
+                                         style="left: 43%; top: 96%;"
+                                         onclick="seleccionarCiudad('Punta Arenas')"
+                                         title="Punta Arenas: 7.9°C">
+                                        P                                    </div>
+                                                                    </div>
+                            </div>
+
+                            <div class="map-legend">
+                                <div class="fw-bold mb-1 text-white">Nodos Activos</div>
+                                <div class="map-legend-item"><span style="width:10px;height:10px;background:var(--accent-cyan);display:inline-block;border-radius:50%"></span> Haz clic en una estación</div>
+                                <div class="map-legend-item"><i class="bi bi-arrows-move me-1"></i> Arrastra para mover el mapa</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna Pronóstico de 14 Días -->
+                    <div class="col-lg-5 mb-4">
+                        <div class="bd-card h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <span class="text-uppercase text-muted-light small fw-bold">Pronóstico Extendido</span>
+                                    <h4 class="fw-bold text-white-strong m-0">Santiago</h4>
+                                </div>
+                                <form method="GET" action="index.php">
+                                    <select name="ciudad_pro" onchange="this.form.submit()" class="form-select bg-dark text-white border-secondary">
+                                                                                    <option value="Arica" >Arica</option>
+                                                                                    <option value="Antofagasta" >Antofagasta</option>
+                                                                                    <option value="Copiapó" >Copiapó</option>
+                                                                                    <option value="Concón" >Concón</option>
+                                                                                    <option value="Viña del Mar" >Viña del Mar</option>
+                                                                                    <option value="Valparaíso" >Valparaíso</option>
+                                                                                    <option value="Santiago" selected>Santiago</option>
+                                                                                    <option value="Puente Alto" >Puente Alto</option>
+                                                                                    <option value="San José de Maipo" >San José de Maipo</option>
+                                                                                    <option value="Litueche" >Litueche</option>
+                                                                                    <option value="Concepción" >Concepción</option>
+                                                                                    <option value="Temuco" >Temuco</option>
+                                                                                    <option value="Puerto Montt" >Puerto Montt</option>
+                                                                                    <option value="Coyhaique" >Coyhaique</option>
+                                                                                    <option value="Punta Arenas" >Punta Arenas</option>
+                                                                            </select>
+                                </form>
+                            </div>
+
+                                                        <div class="d-flex flex-column gap-2" style="max-height: 500px; overflow-y: auto;">
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">17/11/2026</small>
+                                        <span class="fw-semibold text-white small">Chubascos Moderados</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">22.9°C</span>
+                                        <span class="text-primary fw-bold">13.5°C</span>
+                                                                                    <small class="text-info d-block"><i class="bi bi-droplet-fill"></i> 9.4mm</small>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">18/11/2026</small>
+                                        <span class="fw-semibold text-white small">Llovizna Moderada</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">24.1°C</span>
+                                        <span class="text-primary fw-bold">12.3°C</span>
+                                                                                    <small class="text-info d-block"><i class="bi bi-droplet-fill"></i> 1.1mm</small>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">19/11/2026</small>
+                                        <span class="fw-semibold text-white small">Llovizna Moderada</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">21.7°C</span>
+                                        <span class="text-primary fw-bold">12.6°C</span>
+                                                                                    <small class="text-info d-block"><i class="bi bi-droplet-fill"></i> 2.7mm</small>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">20/11/2026</small>
+                                        <span class="fw-semibold text-white small">Nublado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">24.1°C</span>
+                                        <span class="text-primary fw-bold">11.8°C</span>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">21/11/2026</small>
+                                        <span class="fw-semibold text-white small">Nublado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">24.4°C</span>
+                                        <span class="text-primary fw-bold">12.7°C</span>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">22/11/2026</small>
+                                        <span class="fw-semibold text-white small">Nublado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">25°C</span>
+                                        <span class="text-primary fw-bold">12.9°C</span>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">23/11/2026</small>
+                                        <span class="fw-semibold text-white small">Despejado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">26.3°C</span>
+                                        <span class="text-primary fw-bold">12.4°C</span>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">24/11/2026</small>
+                                        <span class="fw-semibold text-white small">Despejado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">30.4°C</span>
+                                        <span class="text-primary fw-bold">14.2°C</span>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">25/11/2026</small>
+                                        <span class="fw-semibold text-white small">Despejado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">34.4°C</span>
+                                        <span class="text-primary fw-bold">17°C</span>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">26/11/2026</small>
+                                        <span class="fw-semibold text-white small">Parcialmente Nublado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">30.4°C</span>
+                                        <span class="text-primary fw-bold">17.5°C</span>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">27/11/2026</small>
+                                        <span class="fw-semibold text-white small">Principalmente Despejado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">30.5°C</span>
+                                        <span class="text-primary fw-bold">15.9°C</span>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">28/11/2026</small>
+                                        <span class="fw-semibold text-white small">Principalmente Despejado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">31.4°C</span>
+                                        <span class="text-primary fw-bold">15.2°C</span>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">29/11/2026</small>
+                                        <span class="fw-semibold text-white small">Nublado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">32.6°C</span>
+                                        <span class="text-primary fw-bold">16.4°C</span>
+                                                                            </div>
+                                </div>
+                                                                <div class="p-2 rounded bg-dark bg-opacity-40 border border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-info mono d-block">30/11/2026</small>
+                                        <span class="fw-semibold text-white small">Parcialmente Nublado</span>
+                                    </div>
+                                    <div class="text-end mono">
+                                        <span class="text-danger fw-bold me-2">31.5°C</span>
+                                        <span class="text-primary fw-bold">18.8°C</span>
+                                                                            </div>
+                                </div>
+                                                            </div>
+                                                    </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Gráfico de Líneas para Temperaturas
+        const ctxTemp = document.getElementById('chartTemperatura').getContext('2d');
+        new Chart(ctxTemp, {
+            type: 'line',
+            data: {
+                labels: ["2026-11-15 23:16:00","2026-11-15 23:29:31","2026-11-15 23:36:10","2026-11-16 00:07:29","2026-11-16 00:09:01","2026-11-16 00:18:52","2026-11-16 00:53:53","2026-11-16 04:55:37","2026-11-16 06:50:13","2026-11-17 04:20:46"],
+                datasets: [
+                                        {
+                        label: 'Arica',
+                        data: [23.800000000000000710542735760100185871124267578125,23.800000000000000710542735760100185871124267578125,23.699999999999999289457264239899814128875732421875,23.699999999999999289457264239899814128875732421875,23.699999999999999289457264239899814128875732421875,23.699999999999999289457264239899814128875732421875,23.699999999999999289457264239899814128875732421875,22.89999999999999857891452847979962825775146484375,22.300000000000000710542735760100185871124267578125,22.60000000000000142108547152020037174224853515625],
+                        borderColor: '#00F0FF',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        borderWidth: 2
+                    },
+                                        {
+                        label: 'Antofagasta',
+                        data: [19.89999999999999857891452847979962825775146484375,19.89999999999999857891452847979962825775146484375,19.89999999999999857891452847979962825775146484375,19.89999999999999857891452847979962825775146484375,19.89999999999999857891452847979962825775146484375,20,20.10000000000000142108547152020037174224853515625,20.300000000000000710542735760100185871124267578125,20.10000000000000142108547152020037174224853515625,19.5],
+                        borderColor: '#00E676',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        borderWidth: 2
+                    },
+                                        {
+                        label: 'Copiapó',
+                        data: [21.39999999999999857891452847979962825775146484375,21.39999999999999857891452847979962825775146484375,21,20.5,20.5,20.300000000000000710542735760100185871124267578125,19.800000000000000710542735760100185871124267578125,15.800000000000000710542735760100185871124267578125,15.0999999999999996447286321199499070644378662109375,15.9000000000000003552713678800500929355621337890625],
+                        borderColor: '#D500F9',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        borderWidth: 2
+                    },
+                                        {
+                        label: 'Concón',
+                        data: [17.60000000000000142108547152020037174224853515625,17.60000000000000142108547152020037174224853515625,17.5,17.199999999999999289457264239899814128875732421875,17.199999999999999289457264239899814128875732421875,17.10000000000000142108547152020037174224853515625,16.800000000000000710542735760100185871124267578125,15.800000000000000710542735760100185871124267578125,15.199999999999999289457264239899814128875732421875,14.5999999999999996447286321199499070644378662109375],
+                        borderColor: '#FF9100',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        borderWidth: 2
+                    },
+                                        {
+                        label: 'Viña del Mar',
+                        data: [17.5,17.5,17.300000000000000710542735760100185871124267578125,17,17,16.89999999999999857891452847979962825775146484375,16.699999999999999289457264239899814128875732421875,16.10000000000000142108547152020037174224853515625,16,14.5999999999999996447286321199499070644378662109375],
+                        borderColor: '#2979FF',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        borderWidth: 2
+                    },
+                                    ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: '#F1F5F9' } } },
+                scales: {
+                    x: { ticks: { color: '#94A3B8' }, grid: { color: '#222E4B' } },
+                    y: { ticks: { color: '#94A3B8' }, grid: { color: '#222E4B' } }
+                }
+            }
+        });
+
+        // Gráfico Donut de Condiciones Atmosféricas
+        const ctxCond = document.getElementById('chartCondiciones').getContext('2d');
+        new Chart(ctxCond, {
+            type: 'doughnut',
+            data: {
+                labels: ["Neblina","Llovizna","Despejado","Chubascos","Cubierto","Parcialmente Nublado","Nublado","Principalmente Despejado","Llovizna Ligera","Lluvia D\u00e9bil","Chubascos Ligeros","Tormenta El\u00e9ctrica","Llovizna Densa","Llovizna Moderada","Chubascos Moderados","Chubascos de Nieve Ligeros","Chubascos Violentos","Lluvia Moderada","Chubascos de Nieve Fuertes","Nieve Moderada","Niebla","Tormenta con Granizo Ligero"],
+                datasets: [{
+                    data: [17,11,25610,15,8,5132,11426,6183,3277,89,630,641,912,1346,609,22,8,25,9,40,506,36],
+                    backgroundColor: ['#00F0FF', '#00E676', '#D500F9', '#FF9100', '#2979FF', '#ECEFF1']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { color: '#F1F5F9' } } }
+            }
+        });
+
+        // Controles y Pan/Zoom para el Mapa
+        let zoomScale = 1;
+        let posX = 0;
+        let posY = 0;
+        let isDragging = false;
+        let startX = 0, startY = 0;
+
+        const mapaZoom = document.getElementById('mapaZoom');
+        const mapaContenedor = document.getElementById('mapaContenedor');
+
+        function actualizarTransformacion() {
+            mapaZoom.style.transform = `translate(${posX}px, ${posY}px) scale(${zoomScale})`;
+        }
+
+        function ajustarZoom(delta) {
+            zoomScale = Math.min(Math.max(0.8, zoomScale + delta), 3);
+            actualizarTransformacion();
+        }
+
+        function reiniciarMapa() {
+            zoomScale = 1;
+            posX = 0;
+            posY = 0;
+            actualizarTransformacion();
+        }
+
+        mapaContenedor.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX - posX;
+            startY = e.clientY - posY;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            posX = e.clientX - startX;
+            posY = e.clientY - startY;
+            actualizarTransformacion();
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        function seleccionarCiudad(ciudad) {
+            window.location.href = `index.php?ciudad_pro=${encodeURIComponent(ciudad)}#pronostico`;
+        }
+    </script>
+</body>
+</html>
